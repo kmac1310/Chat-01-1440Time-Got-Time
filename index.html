@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>1440TIME™ PLANNER</title>
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background-color: #000;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: manipulation;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            margin: 20px;
+            padding: 20px;
+            background-color: #111;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            font-size: min(4vw, 24px);
+            margin: 0;
+            padding: 10px 0;
+            text-align: center;
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00;
+        }
+
+        .time-display {
+            font-size: min(15vw, 72px);
+            text-align: center;
+            margin: 20px 0;
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background-color: #222;
+            color: white;
+            font-size: 16px;
+            appearance: none;
+        }
+
+        input[type="time"] {
+            min-height: 44px;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            background-color: #ffff00;
+            color: black;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            min-height: 44px;
+            touch-action: manipulation;
+            transition: transform 0.1s;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .task-list {
+            margin-top: 20px;
+        }
+
+        .task {
+            background-color: #222;
+            padding: 15px;
+            margin: 5px 0;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .task button {
+            background-color: #ff3333;
+            color: white;
+            padding: 8px 15px;
+            white-space: nowrap;
+        }
+
+        .remaining-time {
+            text-align: center;
+            font-size: min(6vw, 28px);
+            margin: 20px 0;
+            color: #00ff00;
+        }
+
+        .alert-settings {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #222;
+            border-radius: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .toggle-button {
+            background-color: #ffff00;
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .quick-times {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        .quick-times button {
+            flex: 1;
+            background-color: #333;
+            color: #fff;
+        }
+
+        .quick-times button:hover {
+            background-color: #444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>1440TIME™ PLANNER</h1>
+        
+        <div class="input-group">
+            <label>Set End Time:</label>
+            <input type="time" id="endTime" onchange="calculateTimeRemaining()">
+            <div class="quick-times">
+                <button onclick="addMinutes(30)">+30m</button>
+                <button onclick="addMinutes(60)">+1h</button>
+                <button onclick="addMinutes(120)">+2h</button>
+            </div>
+        </div>
+
+        <div class="time-display" id="timeDisplay">
+            0
+        </div>
+        <div class="remaining-time" id="remainingFreeTime">
+            On-TIME™ (Free Time): 0
+        </div>
+
+        <div class="alert-settings">
+            <label>Alert Settings:</label>
+            <button id="alertToggle" class="toggle-button" onclick="toggleAlert()">Alerts: OFF</button>
+            <button id="testSound" onclick="playAlert()">Test Sound</button>
+        </div>
+
+        <div class="input-group">
+            <input type="text" id="taskName" placeholder="Task name">
+            <input inputmode="numeric" pattern="[0-9]*" id="taskDuration" placeholder="Minutes">
+            <button onclick="addTask()">Add Task</button>
+        </div>
+
+        <div class="task-list" id="taskList"></div>
+    </div>
+
+    <script>
+        let tasks = [];
+        let endTimeMinutes = 0;
+        let alertEnabled = false;
+        let alertPlayed = false;
+        let intervalId = null;
+
+        async function playAlert() {
+            // Vibrate if supported
+            if ('vibrate' in navigator) {
+                navigator.vibrate([200, 100, 200, 100, 200]);
+            }
+
+            // Play beep sounds
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            function playBeep(frequency, startTime, duration) {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.type = 'square';
+                oscillator.frequency.value = frequency;
+                
+                gainNode.gain.setValueAtTime(0.3, startTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration - 0.05);
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.start(startTime);
+                oscillator.stop(startTime + duration);
+            }
+            
+            const now = audioContext.currentTime;
+            for(let i = 0; i < 3; i++) {
+                playBeep(880, now + (i * 0.3), 0.2);
+            }
+
+            // Show notification if supported
+            if ('Notification' in window && Notification.permission === "granted") {
+                new Notification("1440TIME™ Alert", {
+                    body: "It's time to rock",
+                });
+            }
+
+            // Add a delay before voice
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
+            // Play voice alert
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance("It's time to rock");
+                utterance.rate = 0.9;
+                utterance.pitch = 1.2;
+                utterance.volume = 1.0;
+                
+                const voices = speechSynthesis.getVoices();
+                const femaleVoice = voices.find(voice => 
+                    voice.name.toLowerCase().includes('female') || 
+                    voice.name.toLowerCase().includes('woman')
+                );
+                
+                if (femaleVoice) {
+                    utterance.voice = femaleVoice;
+                }
+                
+                speechSynthesis.speak(utterance);
+            }
+        }
+
+        function toggleAlert() {
+            alertEnabled = !alertEnabled;
+            alertPlayed = false;
+            const button = document.getElementById('alertToggle');
+            button.textContent = `Alerts: ${alertEnabled ? 'ON' : 'OFF'}`;
+            button.classList.toggle('active', alertEnabled);
+        }
+
+        function calculateTimeRemaining() {
+            const endTimeInput = document.getElementById('endTime').value;
+            if (!endTimeInput) return;
+
+            const now = new Date();
+            const endTime = new Date(now.toDateString() + ' ' + endTimeInput);
+            
+            if (endTime < now) {
+                endTime.setDate(endTime.getDate() + 1);
+            }
+
+            const diffMinutes = Math.floor((endTime - now) / 60000);
+            endTimeMinutes = diffMinutes;
+            alertPlayed = false;
+            
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+            
+            updateDisplay();
+            intervalId = setInterval(updateRemainingTime, 60000);
+        }
+
+        function updateRemainingTime() {
+            const endTimeInput = document.getElementById('endTime').value;
+            if (!endTimeInput) return;
+
+            const now = new Date();
+            const endTime = new Date(now.toDateString() + ' ' + endTimeInput);
+            
+            if (endTime < now) {
+                endTime.setDate(endTime.getDate() + 1);
+            }
+
+            const diffMinutes = Math.floor((endTime - now) / 60000);
+            endTimeMinutes = diffMinutes;
+            updateDisplay();
+        }
+
+        function addTask() {
+            const name = document.getElementById('taskName').value;
+            const duration = parseInt(document.getElementById('taskDuration').value);
+
+            if (name && duration) {
+                tasks.push({ name, duration });
+                document.getElementById('taskName').value = '';
+                document.getElementById('taskDuration').value = '';
+                updateDisplay();
+            }
+        }
+
+        function removeTask(index) {
+            tasks.splice(index, 1);
+            updateDisplay();
+        }
+
+        function updateDisplay() {
+            const taskList = document.getElementById('taskList');
+            taskList.innerHTML = '';
+            
+            let totalTaskMinutes = 0;
+            tasks.forEach((task, index) => {
+                totalTaskMinutes += task.duration;
+                const taskElement = document.createElement('div');
+                taskElement.className = 'task';
+                taskElement.innerHTML = `
+                    <span>${task.name} - ${task.duration} minutes</span>
+                    <button onclick="removeTask(${index})">Remove</button>
+                `;
+                taskList.appendChild(taskElement);
+            });
+
+            const remainingFree = endTimeMinutes - totalTaskMinutes;
+            document.getElementById('timeDisplay').textContent = 
+                endTimeMinutes > 0 ? (endTimeMinutes < 100 ? endTimeMinutes.toString() : endTimeMinutes.toString()) : '0';
+            document.getElementById('remainingFreeTime').textContent = 
+                `On-TIME™ (Free Time): ${Math.max(0, remainingFree)}`;
+            
+            const timeDisplay = document.getElementById('remainingFreeTime');
+            timeDisplay.style.color = remainingFree < 0 ? '#ff0000' : '#00ff00';
+
+            if (alertEnabled && remainingFree <= 0 && !alertPlayed) {
+                playAlert();
+                alertPlayed = true;
+            }
+        }
+
+        function addMinutes(minutes) {
+            const now = new Date();
+            const futureTime = new Date(now.getTime() + minutes * 60000);
+            const timeString = futureTime.toTimeString().slice(0,5);
+            document.getElementById('endTime').value = timeString;
+            calculateTimeRemaining();
+        }
+    </script>
+</body>
+</html>
